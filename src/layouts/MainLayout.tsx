@@ -15,7 +15,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal'; // Ideally ma
 export default function MainLayout() {
     const { theme, toggleTheme } = useTheme();
     const {
-        movies, setMovies, appSettings, saveSettings,
+        movies, setMovies, appSettings, saveSettings, clearAllData,
         // You might need to expose these if modals are here
         stats
     } = useData();
@@ -122,7 +122,7 @@ export default function MainLayout() {
                 setIsModalOpen(false);
             }} editingMovie={null} appSettings={appSettings} />}
 
-            {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} onSave={(s) => { saveSettings(s); setIsSettingsOpen(false); }} onForceSave={async () => { /* Implement Force Save in DataContext if needed */ }} initialSettings={appSettings} movies={movies} setMovies={setMovies} />}
+            {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} onSave={(s) => { saveSettings(s); setIsSettingsOpen(false); }} onForceSave={clearAllData} initialSettings={appSettings} movies={movies} setMovies={setMovies} />}
 
             {isShareOpen && <ShareExportModal onClose={() => setIsShareOpen(false)} movies={movies} aiAnalysis={null} stats={stats} />}
         </div>

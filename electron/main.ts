@@ -110,7 +110,14 @@ ipcMain.handle('db:read', async () => {
   try {
     const dataPath = await getDataPath();
     const data = await fs.readFile(dataPath, 'utf-8');
-    return JSON.parse(data);
+    try {
+      return JSON.parse(data);
+    } catch (parseError) {
+      console.error("Data JSON parse failed. Backing up and resetting.", parseError);
+      // Backup corrupt file
+      await fs.rename(dataPath, `${dataPath}.bak.${Date.now()}`);
+      return null;
+    }
   } catch (error: any) {
     if (error.code === 'ENOENT') return null; // File doesn't exist yet
     throw error;

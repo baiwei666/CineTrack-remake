@@ -28,7 +28,8 @@ const AddEditModal = ({
       actors: [],
       director: '',
       season: undefined,
-      episodes: 1
+      episodes: 1,
+      createdAt: ''
     }
   );
 
@@ -45,7 +46,8 @@ const AddEditModal = ({
         actors: [],
         director: '',
         season: undefined,
-        episodes: 1
+        episodes: 1,
+        createdAt: ''
       });
     }
   }, [editingMovie]);
@@ -63,7 +65,7 @@ const AddEditModal = ({
           setFormData(prev => ({
             ...prev,
             coverUrl: data.poster_path ? `${TMDB_IMAGE_BASE}${data.poster_path}` : prev.coverUrl,
-            comment: data.overview || prev.comment,
+            overview: data.overview || prev.overview,
             year: data.air_date ? new Date(data.air_date).getFullYear() : prev.year
           }));
         }
@@ -115,7 +117,7 @@ const AddEditModal = ({
   const selectMovie = async (item: any) => {
     // If it's a mock item or we have no API key, just fill what we have
     if (!appSettings.tmdbApiKey && !item.media_type) {
-      setFormData(prev => ({ ...prev, ...item, tags: item.tags || [], comment: item.comment || '' }));
+      setFormData(prev => ({ ...prev, ...item, tags: item.tags || [], overview: item.overview || '', comment: item.comment || '' }));
       setSearchSuggestions([]);
       return;
     }
@@ -359,20 +361,35 @@ const AddEditModal = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">观影笔记 / 简介</label>
-            <textarea
-              value={formData.comment || ''}
-              onChange={e => setFormData({ ...formData, comment: e.target.value })}
-              placeholder="记录你的观影感受或剧情简介..."
-              className="w-full bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white h-32 focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed transition"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">剧情简介 (TMDB 自动填入)</label>
+              <textarea
+                value={formData.overview || ''}
+                onChange={e => setFormData({ ...formData, overview: e.target.value })}
+                placeholder="自动获取的剧情简介..."
+                className="w-full bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white h-32 focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed transition"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">心得体会 (用户评价)</label>
+              <textarea
+                value={formData.comment || ''}
+                onChange={e => setFormData({ ...formData, comment: e.target.value })}
+                placeholder="写下你的观影感受..."
+                className="w-full bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white h-32 focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed transition"
+              />
+            </div>
           </div>
 
           <button
             onClick={() => {
               if (!formData.title) return alert('请输入标题');
-              onSave({ ...formData, id: formData.id || generateId() } as MovieRecord);
+              onSave({
+                ...formData,
+                id: formData.id || generateId(),
+                createdAt: formData.createdAt || new Date().toISOString()
+              } as MovieRecord);
             }}
             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
           >

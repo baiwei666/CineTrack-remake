@@ -44,11 +44,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 if (hasRunBefore) {
                     setMovies(Array.isArray(savedMovies) ? savedMovies : []);
                 } else {
-                    if (Array.isArray(savedMovies) && savedMovies.length > 0) {
+                    if (Array.isArray(savedMovies)) {
                         setMovies(savedMovies);
                     } else {
+                        // If we expected data but got none, tread carefully.
+                        // Only init mock if we confirm it's a first run (handled by hasRunBefore)
+                        // But here hasRunBefore is FALSE.
+
                         const mockWithIds = MOCK_DB.map(m => ({ ...m, id: generateId() })) as MovieRecord[];
                         setMovies(mockWithIds);
+                        // Don't auto-save immediately to disk in case of race conditions, 
+                        // let the effect handle it or wait for user interaction?
+                        // Actually, for first run, saving mock is fine.
                         await db.saveMovies(mockWithIds);
                     }
                     localStorage.setItem('cinetrack_has_run', 'true');
@@ -77,12 +84,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setAppSettings(newSettings);
     };
 
-    const clearAllData = () => {
-        setMovies([]);
-        setCollections([]);
-        setAppSettings({ ...appSettings, savedViews: [] });
-        localStorage.clear();
-        window.location.reload();
+    const clearAllData = async () => {
+        try {
+            // Explicitly wipe Disk Data first
+            await db.saveMovies([]);
+            await db.saveAppSettings({ tmdbApiKey: '', aiProvider: 'Mock', aiModel: 'gpt-3.5-turbo' } as AppSettings);
+
+            // Clear State
+            setMovies([]);
+            setCollections([]);
+            setAppSettings({ tmdbApiKey: '', aiProvider: 'Mock', aiModel: 'gpt-3.5-turbo', savedViews: [] });
+
+            // Clear LocalStorage
+            localStorage.clear();
+            localStorage.setItem('cinetrack_has_run', 'true'); // Prevent mock data regeneration
+
+            alert("所有数据已清空。应用将重启。");
+            window.location.reload();
+        } catch (e) {
+            console.error("Failed to clear data:", e);
+            alert("清空数据失败，请手动删除数据文件。");
+        }
     };
 
     // Stats Logic (Moved from App.tsx)

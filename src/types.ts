@@ -19,6 +19,7 @@ export interface MovieRecord {
   duration?: number;
   season?: number;
   episodes?: number;
+  createdAt?: string;
 
   // Watch Timer & Status
   status: WatchStatus;
@@ -48,7 +49,7 @@ export interface FilterState {
   search: string;
   type: MovieType | 'All';
   tag: string;
-  sort: 'date_desc' | 'date_asc' | 'rating_desc' | 'rating_asc';
+  sort: 'date_desc' | 'date_asc' | 'rating_desc' | 'rating_asc' | 'added_desc' | 'added_asc' | 'year_desc' | 'year_asc' | 'title_asc';
 }
 
 

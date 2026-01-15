@@ -42,7 +42,20 @@ export default function Library() {
                 setShowFilterPanel(true);
             }
         }
+
+        // Restore Scroll Position
+        const savedScroll = sessionStorage.getItem('library_scroll_top');
+        if (savedScroll) {
+            setTimeout(() => {
+                window.scrollTo(0, parseInt(savedScroll));
+            }, 50); // Small delay to ensure render
+        }
     }, [searchParams, appSettings.savedViews]);
+
+    const handleCardClick = (id: string) => {
+        sessionStorage.setItem('library_scroll_top', window.scrollY.toString());
+        navigate(`/movie/${id}`);
+    };
 
     const handleSaveView = () => {
         const name = prompt("请输入视图名称 (例如 '2023高分科幻'):");
@@ -62,7 +75,7 @@ export default function Library() {
         search: '',
         type: 'All',
         tag: 'All',
-        sort: 'date_desc'
+        sort: 'added_desc'
     });
 
     const allTags = useMemo(() => {
@@ -122,10 +135,15 @@ export default function Library() {
             return matchSearch && matchType && matchTag && matchAdvanced;
         }).sort((a, b) => {
             switch (filters.sort) {
+                case 'added_desc': return (new Date(b.createdAt || b.watchDate).getTime() || 0) - (new Date(a.createdAt || a.watchDate).getTime() || 0);
+                case 'added_asc': return (new Date(a.createdAt || a.watchDate).getTime() || 0) - (new Date(b.createdAt || b.watchDate).getTime() || 0);
                 case 'date_desc': return new Date(b.watchDate).getTime() - new Date(a.watchDate).getTime();
                 case 'date_asc': return new Date(a.watchDate).getTime() - new Date(b.watchDate).getTime();
                 case 'rating_desc': return b.rating - a.rating;
                 case 'rating_asc': return a.rating - b.rating;
+                case 'year_desc': return b.year - a.year;
+                case 'year_asc': return a.year - b.year;
+                case 'title_asc': return a.title.localeCompare(b.title, 'zh-CN');
                 default: return 0;
             }
         });
@@ -187,6 +205,16 @@ export default function Library() {
                             <input type="text" placeholder="搜名/人/类..." value={filters.search} onChange={e => setFilters({ ...filters, search: e.target.value })} className="bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-lg py-2 pl-10 pr-4 text-slate-900 dark:text-white w-full text-sm focus:border-blue-500 dark:focus:border-blue-500 outline-none transition shadow-sm dark:shadow-none" />
                         </div>
                         <button onClick={() => setShowDuplicates(!showDuplicates)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border transition shadow-sm dark:shadow-none ${showDuplicates ? 'bg-orange-50 border-orange-500 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300' : 'bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}><Files size={16} /> 查重</button>
+                        <select value={filters.sort} onChange={e => setFilters({ ...filters, sort: e.target.value as any })} className="bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white text-sm outline-none focus:border-blue-500 transition shadow-sm dark:shadow-none">
+                            <option value="added_desc">按添加时间 (新→旧)</option>
+                            <option value="added_asc">按添加时间 (旧→新)</option>
+                            <option value="date_desc">按观看日期 (新→旧)</option>
+                            <option value="date_asc">按观看日期 (旧→新)</option>
+                            <option value="rating_desc">按评分 (高→低)</option>
+                            <option value="rating_asc">按评分 (低→高)</option>
+                            <option value="year_desc">按年份 (新→旧)</option>
+                            <option value="title_asc">按名称 (A-Z)</option>
+                        </select>
                         <select value={filters.tag} onChange={e => setFilters({ ...filters, tag: e.target.value })} className="bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white text-sm outline-none focus:border-blue-500 transition shadow-sm dark:shadow-none"><option value="All">所有标签</option>{allTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}</select>
                         <select value={filters.type} onChange={e => setFilters({ ...filters, type: e.target.value as any })} className="bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white text-sm outline-none focus:border-blue-500 transition shadow-sm dark:shadow-none"><option value="All">所有格式</option><option value="Movie">电影</option><option value="Series">剧集</option><option value="Anime">动画</option></select>
                     </div>
@@ -221,7 +249,7 @@ export default function Library() {
                     {/* Movie Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredMovies.map(movie => (
-                            <div key={movie.id} onClick={() => navigate(`/movie/${movie.id}`)} className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden hover:shadow-2xl hover:shadow-blue-900/5 dark:hover:shadow-blue-900/10 hover:border-gray-300 dark:hover:border-slate-600 transition duration-300 flex flex-col cursor-pointer h-full">
+                            <div key={movie.id} onClick={() => handleCardClick(movie.id)} className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden hover:shadow-2xl hover:shadow-blue-900/5 dark:hover:shadow-blue-900/10 hover:border-gray-300 dark:hover:border-slate-600 transition duration-300 flex flex-col cursor-pointer h-full">
                                 <div className="relative w-full aspect-[2/3] overflow-hidden bg-gray-100 dark:bg-slate-800 shrink-0">
                                     {movie.coverUrl ? <img src={movie.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt={movie.title} /> : <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600 bg-gray-100 dark:bg-slate-800"><Film size={40} /></div>}
                                     <div className="absolute top-2 right-2 bg-white/90 dark:bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1 shadow-lg border border-gray-200 dark:border-white/10 z-10">
@@ -240,7 +268,20 @@ export default function Library() {
                                                 <div className="flex flex-col gap-1"><span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">评分</span><StarRating rating={movie.rating} size={12} /></div>
                                             </div>
                                         </div>
-                                        <div className="flex-1 overflow-y-auto scrollbar-none space-y-2"><div className="flex items-center gap-2"><Quote size={14} className="text-blue-500 dark:text-blue-400" /><span className="text-xs font-bold text-slate-800 dark:text-slate-200">简介与笔记</span></div><p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{movie.comment || <span className="italic opacity-50">暂无内容...</span>}</p></div>
+                                        <div className="flex-1 overflow-y-auto scrollbar-none space-y-3">
+                                            {movie.overview && (
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2"><Film size={12} className="text-blue-500" /><span className="text-[10px] font-bold text-slate-500 uppercase">内容简介</span></div>
+                                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{movie.overview}</p>
+                                                </div>
+                                            )}
+                                            {(movie.comment || movie.review) && (
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2"><Quote size={12} className="text-purple-500" /><span className="text-[10px] font-bold text-slate-500 uppercase">心得体会</span></div>
+                                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{movie.comment || movie.review}</p>
+                                                </div>
+                                            )}
+                                        </div>
                                         {movie.tags && movie.tags.length > 0 && <div className="mt-3 pt-2 border-t border-gray-200 dark:border-slate-700/50 flex flex-wrap gap-1.5">{movie.tags.slice(0, 6).map(t => <span key={t} className="text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 px-1.5 py-0.5 rounded">{t}</span>)}</div>}
                                     </div>
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60 dark:opacity-80 group-hover:opacity-0 transition-opacity duration-300"></div>
@@ -277,7 +318,8 @@ export default function Library() {
                         ))}
                     </div>
                 </>
-            )}
+            )
+            }
 
             {isModalOpen && <AddEditModal onClose={() => setIsModalOpen(false)} onSave={handleSave} editingMovie={editingMovie} appSettings={appSettings} />}
             {movieToDelete && <DeleteConfirmModal movie={movieToDelete} onClose={() => setMovieToDelete(null)} onConfirm={handleDelete} />}

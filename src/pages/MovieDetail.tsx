@@ -18,6 +18,12 @@ import PersonHoverCard from '../components/PersonHoverCard';
 export default function MovieDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+
+    // Scroll to top on mount
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
+
     const { movies, setMovies, appSettings } = useData();
     const movie = movies.find(m => m.id === id);
 
@@ -32,7 +38,7 @@ export default function MovieDetail() {
     // Initialize thought from overview (per data swap fix)
     useEffect(() => {
         if (movie) {
-            setThought(movie.overview || '');
+            setThought(movie.comment || movie.review || '');
         }
     }, [movie]);
 
@@ -89,7 +95,8 @@ export default function MovieDetail() {
         if (!movie) return;
         // Update overview with the thought (per data swap fix)
         // We leave review/comment alone as they hold the Plot currently
-        const updated = { ...movie, overview: thought };
+        // Update comment/review with the thought
+        const updated = { ...movie, comment: thought, review: thought };
         handleUpdateMovie(updated);
         setIsEditingThought(false);
     };
@@ -209,7 +216,7 @@ export default function MovieDetail() {
                             <Film size={20} className="text-blue-500" /> 内容简介
                         </h3>
                         <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                            {movie.review || movie.comment || '暂无简介...'}
+                            {movie.overview || '暂无简介...'}
                         </p>
                     </div>
 
@@ -237,7 +244,7 @@ export default function MovieDetail() {
                         ) : (
                             <div className="p-6 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-2xl border border-white/40 dark:border-slate-700/30 shadow-sm relative group">
                                 <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-serif text-lg">
-                                    {movie.overview || <span className="italic text-slate-400">暂无心得...</span>}
+                                    {movie.comment || movie.review || <span className="italic text-slate-400">暂无心得...</span>}
                                 </p>
                             </div>
                         )}

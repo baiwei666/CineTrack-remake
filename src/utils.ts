@@ -55,8 +55,8 @@ class CineTrackDB {
     try {
       const fileData = await window.electron.db.read();
 
-      if (!fileData) {
-        console.log("No local file data found. Checking LocalStorage for migration...");
+      if (!fileData || (typeof fileData === 'object' && Object.keys(fileData).length === 0 && !Array.isArray(fileData.movies))) {
+        console.log("No valid local file data found. Checking LocalStorage for migration...");
         // Migration Logic
         const lsMovies = localStorage.getItem(LS_MOVIES);
         const lsSettings = localStorage.getItem(LS_SETTINGS);
@@ -72,10 +72,8 @@ class CineTrackDB {
           await window.electron.db.write(migrationData);
           this.inMemoryCache = migrationData;
           console.log("Migration successful!");
-
-          // Optional: Clear LocalStorage after safe migration
-          // localStorage.clear(); 
         } else {
+          // New User or clean slate
           this.inMemoryCache = { movies: [], settings: null, theme: 'dark' };
         }
       } else {
