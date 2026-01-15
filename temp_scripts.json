@@ -1,0 +1,5 @@
+{
+    "scripts": {
+        "build:compile-only": "vite build && tsc -p electron/tsconfig.json"
+    }
+}

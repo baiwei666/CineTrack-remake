@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-react
+dist-electron
+win-unpacked
+
 *.local
 
 # Editor directories and files

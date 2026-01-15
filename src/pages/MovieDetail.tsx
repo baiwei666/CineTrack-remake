@@ -187,20 +187,17 @@ export default function MovieDetail() {
                         </div>
                         <div className="space-y-1">
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><User size={12} /> 导演</span>
-                            <div className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                            <div className="font-medium text-slate-800 dark:text-slate-200 relative">
                                 <PersonHoverCard name={movie.director || ''} role="director" currentMovieId={movie.id} />
                             </div>
                         </div>
                         <div className="space-y-1">
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Users size={12} /> 主演</span>
-                            <div className="font-medium text-slate-800 dark:text-slate-200 truncate flex gap-2">
+                            <div className="font-medium text-slate-800 dark:text-slate-200 flex flex-wrap gap-x-3 gap-y-1">
                                 {movie.actors && movie.actors.length > 0 ? (
-                                    <div className="flex gap-2 overflow-hidden">
-                                        {movie.actors.slice(0, 2).map((actor) => (
-                                            <PersonHoverCard key={actor} name={actor} role="actor" currentMovieId={movie.id} />
-                                        ))}
-                                        {movie.actors.length > 2 && <span className="text-slate-400 text-xs self-center">...</span>}
-                                    </div>
+                                    movie.actors.map((actor) => (
+                                        <PersonHoverCard key={actor} name={actor} role="actor" currentMovieId={movie.id} />
+                                    ))
                                 ) : '未知'}
                             </div>
                         </div>
