@@ -1,0 +1,5 @@
+{
+  "name": "CineTrack",
+  "description": "A comprehensive movie and series tracking application with TMDB integration and AI-powered analysis.",
+  "requestFramePermissions": []
+}

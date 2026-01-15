@@ -1,0 +1,54 @@
+{
+  "name": "cinetrack",
+  "private": true,
+  "version": "0.0.0",
+  "main": "dist-electron/main.js",
+  "description": "A modern movie tracking application",
+  "author": "User",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"cross-env BROWSER=none vite\" \"wait-on tcp:3000 && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:build": "vite build && tsc -p electron/tsconfig.json && electron-builder"
+  },
+  "dependencies": {
+    "colorthief": "^2.6.0",
+    "framer-motion": "^12.26.2",
+    "html-to-image": "^1.11.11",
+    "lucide-react": "^0.556.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-router-dom": "^7.12.0"
+  },
+  "devDependencies": {
+    "@types/color-thief-node": "^1.0.4",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.cinetrack.app",
+    "productName": "CineTrack",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist-react/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
