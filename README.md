@@ -36,6 +36,16 @@
 - **Charts**: [Recharts](https://recharts.org/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 
+  截图
+  <img width="1885" height="970" alt="750e57bd98b38cb6e81da6adeb2567cb" src="https://github.com/user-attachments/assets/9bfe191d-0a5a-4e81-b65e-7fbacaf08e1b" />
+<img width="1880" height="930" alt="836d365908b57538c4de9e6162b0cab7" src="https://github.com/user-attachments/assets/69876747-034a-42c1-b281-4175fa0e8db4" />
+<img width="1875" height="1015" alt="24f9d395879e2947106fa0a34f14aeb6" src="https://github.com/user-attachments/assets/6db77893-bda1-4921-96dc-83470422cc80" />
+<img width="1870" height="993" alt="b4d0c2fb77f49e3bf10b53693f6916e1" src="https://github.com/user-attachments/assets/9799c9f3-5127-43f7-8498-506438caac6c" />
+<img width="1884" height="986" alt="1b4baa735c5f6aa1736ff67d0f6f7a02" src="https://github.com/user-attachments/assets/e3cdfbb6-b1c3-4f97-a75d-4f517e0a00aa" />
+<img width="1748" height="985" alt="331596b5f714589603a39bb84f0e95d0" src="https://github.com/user-attachments/assets/84936cf0-254e-4043-b6c9-74c41d448014" />
+<img width="1870" height="970" alt="c7547ee057e6859e8b8b2eb0a8771527" src="https://github.com/user-attachments/assets/0dfbe9f0-b7f8-4166-bd83-8df01bc2fa07" />
+
+
 ## 🚀 快速开始
 
 ### 开发环境
