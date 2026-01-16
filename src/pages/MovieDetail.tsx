@@ -14,6 +14,7 @@ import { MovieRecord } from '../types';
 import { getTMDBDetails, getTMDBSeasonDetails } from '../services/tmdb';
 
 import PersonHoverCard from '../components/PersonHoverCard';
+import EpisodeHoverCard from '../components/EpisodeHoverCard';
 
 export default function MovieDetail() {
     const { id } = useParams();
@@ -282,7 +283,11 @@ export default function MovieDetail() {
                                         </h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {season.episodes.map(ep => (
-                                                <div key={ep.episode_number} className="flex gap-4 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-slate-700/50 transition border border-transparent hover:border-slate-200 dark:hover:border-slate-700 group">
+                                                <EpisodeHoverCard
+                                                    key={ep.episode_number}
+                                                    episode={ep}
+                                                    className="flex gap-4 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-slate-700/50 transition border border-transparent hover:border-slate-200 dark:hover:border-slate-700 group cursor-default"
+                                                >
                                                     <div className="shrink-0 w-32 aspect-video bg-slate-200 dark:bg-slate-800 rounded-lg overflow-hidden relative">
                                                         {ep.still_path ? (
                                                             <img src={ep.still_path} className="w-full h-full object-cover" loading="lazy" />
@@ -307,7 +312,7 @@ export default function MovieDetail() {
                                                             {ep.air_date ? formatDate(ep.air_date) : ''}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </EpisodeHoverCard>
                                             ))}
                                         </div>
                                     </div>
