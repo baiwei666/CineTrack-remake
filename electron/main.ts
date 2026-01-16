@@ -80,7 +80,16 @@ async function loadConfig() {
 // Helper: Save Config
 async function saveConfig(config: any) {
   const configPath = getConfigPath();
-  await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+  const tempPath = `${configPath}.tmp`;
+
+  // Atomic write for config
+  try {
+    await fs.writeFile(tempPath, JSON.stringify(config, null, 2), 'utf-8');
+    await fs.rename(tempPath, configPath);
+  } catch (error) {
+    console.error("Config atomic write failed:", error);
+    try { await fs.unlink(tempPath); } catch { }
+  }
 }
 
 // Helper: Get Default Data Directory
@@ -125,10 +134,25 @@ ipcMain.handle('db:read', async () => {
 });
 
 // IPC: Write Data
+// IPC: Write Data
 ipcMain.handle('db:write', async (_event, data) => {
   const dataPath = await getDataPath();
-  await fs.writeFile(dataPath, JSON.stringify(data, null, 2), 'utf-8');
-  return true;
+  const tempPath = `${dataPath}.tmp`;
+
+  try {
+    // 1. Write to temp file first
+    await fs.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+
+    // 2. Atomically rename temp file to actual file
+    // This ensures the actual file is never in a half-written state
+    await fs.rename(tempPath, dataPath);
+    return true;
+  } catch (error) {
+    console.error("Atomic write failed:", error);
+    // Attempt to clean up temp file if it exists
+    try { await fs.unlink(tempPath); } catch { }
+    throw error;
+  }
 });
 
 // IPC: Get Current Data Path Config
