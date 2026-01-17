@@ -229,17 +229,23 @@ export default function Dashboard() {
                         {/* Monthly Trend */}
                         <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm">
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2"><TrendingUp size={18} /> 月度趋势</h3>
-                            <div className="h-64 flex items-end justify-between gap-2">
+                            <div className="h-64 flex items-end justify-between gap-2 pt-8">
                                 {yearStats.monthlyCounts.map((count: number, idx: number) => {
                                     const max = Math.max(...yearStats.monthlyCounts, 1);
-                                    const height = (count / max) * 100;
+                                    const height = count > 0 ? Math.max((count / max) * 100, 5) : 0;
                                     return (
                                         <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                                            <div className="w-full max-w-[40px] bg-gray-100 dark:bg-slate-800 rounded-t-lg h-full relative flex items-end overflow-hidden">
-                                                <div className="w-full bg-blue-500 opacity-80 group-hover:opacity-100 transition-all duration-500 rounded-t-lg" style={{ height: `${height}%` }} />
-                                                <div className="absolute top-2 w-full text-center text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition">{count}</div>
+                                            <div className="w-full max-w-[40px] h-full relative flex flex-col items-center justify-end">
+                                                {/* 数字标签 - 始终可见，使用醒目样式 */}
+                                                <div className={`mb-1 px-1.5 py-0.5 rounded-md text-xs font-bold transition-all duration-300 ${count > 0 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 shadow-sm' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                    {count}
+                                                </div>
+                                                {/* 柱子 */}
+                                                <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-t-lg flex-1 relative flex items-end overflow-hidden">
+                                                    <div className="w-full bg-gradient-to-t from-blue-600 to-blue-400 opacity-85 group-hover:opacity-100 transition-all duration-500 rounded-t-lg" style={{ height: `${height}%` }} />
+                                                </div>
                                             </div>
-                                            <span className="text-xs text-slate-400">{idx + 1}月</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{idx + 1}月</span>
                                         </div>
                                     )
                                 })}
