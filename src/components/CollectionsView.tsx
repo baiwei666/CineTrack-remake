@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Folder, Plus, MoreVertical, Trash2, Edit2, Film, Layers, Calendar, Wand2 } from 'lucide-react';
-import { Collection, MovieRecord } from '../types';
+import { Folder, Plus, MoreVertical, Trash2, Edit2, Film, Calendar, Wand2 } from 'lucide-react';
+import { Collection } from '../types';
 import { useData } from '../context/DataContext';
 import SmartCollectionModal from './SmartCollectionModal';
+import EditCollectionModal from './EditCollectionModal';
 
 interface CollectionsViewProps {
     onSelectCollection: (collection: Collection) => void;
@@ -12,6 +13,7 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
     const { collections, setCollections, movies } = useData();
     const [isCreating, setIsCreating] = useState(false);
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
+    const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
     const [newCollectionName, setNewCollectionName] = useState('');
 
     const handleCreate = () => {
@@ -29,18 +31,37 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
         setIsCreating(false);
     };
 
-    const handleDelete = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
+    const handleDelete = (id: string, e?: React.MouseEvent) => {
+        e?.stopPropagation();
         if (confirm('确定要删除这个收藏夹吗？(不会删除里面的影片)')) {
             setCollections(prev => prev.filter(c => c.id !== id));
+            if (editingCollection?.id === id) setEditingCollection(null);
         }
+    };
+
+    const handleUpdate = (updated: Collection) => {
+        setCollections(prev => prev.map(c => c.id === updated.id ? updated : c));
+        setEditingCollection(null);
     };
 
     const getCollectionStats = (item: Collection) => {
         const count = item.movieIds.length;
-        // Find covers from first few movies
+        // Find covers from first few movies, OR use custom cover if set
         const collectionMovies = movies.filter(m => item.movieIds.includes(m.id));
-        const covers = collectionMovies.map(m => m.coverUrl).filter(Boolean).slice(0, 3);
+
+        let covers: string[] = [];
+        if (item.coverUrl) {
+            covers = [item.coverUrl];
+            // Add a couple more for the stack effect if available
+            const extra = collectionMovies
+                .filter(m => m.coverUrl && m.coverUrl !== item.coverUrl)
+                .map(m => m.coverUrl)
+                .slice(0, 2);
+            covers.push(...extra);
+        } else {
+            covers = collectionMovies.map(m => m.coverUrl).filter(Boolean).slice(0, 3);
+        }
+
         const latestDate = collectionMovies.length > 0
             ? new Date(Math.max(...collectionMovies.map(m => new Date(m.watchDate).getTime()))).toISOString().split('T')[0]
             : item.createdAt.split('T')[0];
@@ -119,19 +140,30 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
                             </div>
 
                             <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className="font-bold text-slate-900 dark:text-white text-lg group-hover:text-blue-600 transition truncate max-w-[180px]">{collection.name}</h3>
+                                <div className="flex-1 min-w-0 pr-2">
+                                    <h3 className="font-bold text-slate-900 dark:text-white text-lg group-hover:text-blue-600 transition truncate">{collection.name}</h3>
                                     <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
                                         <span className="flex items-center gap-1"><Film size={12} /> {stats.count} 部</span>
                                         <span className="flex items-center gap-1"><Calendar size={12} /> {stats.latestDate}</span>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={(e) => handleDelete(collection.id, e)}
-                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition opacity-0 group-hover:opacity-100"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
+
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition translate-x-2 group-hover:translate-x-0">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setEditingCollection(collection); }}
+                                        className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                                        title="编辑"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
+                                    <button
+                                        onClick={(e) => handleDelete(collection.id, e)}
+                                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                        title="删除"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     );
@@ -150,22 +182,31 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
                     </div>
                 )}
             </div>
+
+            {/* Modals */}
             {isSmartModalOpen && (
                 <SmartCollectionModal
                     onClose={() => setIsSmartModalOpen(false)}
                     onConfirm={(groups) => {
-                        // groups needs to be processed. 
-                        // Actually, let the modal handle the processing or pass back the structures to add.
-                        // Let's assume onConfirm passes back an array of { name: string, ids: string[] }
                         const newCols = groups.map(g => ({
                             id: Date.now().toString() + Math.random().toString().slice(2, 6),
                             name: g.name,
+                            description: g.description,
                             movieIds: g.ids,
                             createdAt: new Date().toISOString()
                         }));
                         setCollections(prev => [...prev, ...newCols]);
                         setIsSmartModalOpen(false);
                     }}
+                />
+            )}
+
+            {editingCollection && (
+                <EditCollectionModal
+                    collection={editingCollection}
+                    onClose={() => setEditingCollection(null)}
+                    onSave={handleUpdate}
+                    onDelete={() => handleDelete(editingCollection.id)}
                 />
             )}
         </div>

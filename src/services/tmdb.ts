@@ -71,6 +71,10 @@ export const getTMDBDetails = async (id: number, type: 'movie' | 'tv', apiKey: s
         // Images (Backdrops preferred)
         const images = data.images?.backdrops?.map((b: any) => `${IMAGE_BASE_URL}${b.file_path}`).slice(0, 10) || [];
 
+        // Collection Info
+        const collectionId = data.belongs_to_collection?.id;
+        const collectionName = data.belongs_to_collection?.name;
+
         return {
             tmdbId: data.id,
             title,
@@ -86,6 +90,8 @@ export const getTMDBDetails = async (id: number, type: 'movie' | 'tv', apiKey: s
             episodes,
             type: type === 'movie' ? 'Movie' : 'Series',
             images,
+            collectionId,
+            collectionName,
             // For series, we assume season 1 initially if tracking, but can be updated later
             season: type === 'tv' ? 1 : undefined
         };

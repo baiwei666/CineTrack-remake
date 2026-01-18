@@ -29,6 +29,10 @@ export interface MovieRecord {
   // Enhanced Details
   overview?: string; // Content Overview (Plot)
   review?: string; // User's Thoughts/Memories
+  // Collection Info
+  collectionId?: number;
+  collectionName?: string;
+
   images?: string[]; // Stills/Backdrops
   seasons?: {
     season_number: number;
@@ -84,6 +88,7 @@ export interface Collection {
   coverUrl?: string;
   movieIds: string[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AiAnalysisResult {

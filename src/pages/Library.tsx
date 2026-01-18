@@ -9,19 +9,43 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import AddEditModal from '../components/AddEditModal';
 import CollectionsView from '../components/CollectionsView';
 import AddToCollectionModal from '../components/AddToCollectionModal';
-import { formatDate } from '../utils';
+import EditCollectionModal from '../components/EditCollectionModal';
+import { formatDate, generateId } from '../utils';
 import { useData } from '../context/DataContext';
 import { FilterState, MovieRecord, FilterRule, SavedView, Collection } from '../types';
-import { generateId } from '../utils';
 import FilterPanel from '../components/FilterPanel';
 
 export default function Library() {
-    const { movies, setMovies, appSettings, saveSettings } = useData();
+    const { movies, setMovies, appSettings, saveSettings, collections, setCollections } = useData();
     const navigate = useNavigate();
 
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<'records' | 'collections'>('records');
     const [viewingCollection, setViewingCollection] = useState<Collection | null>(null);
+    const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+
+    // Auto-update viewing collection if underlying data changes (e.g. after edit)
+    useEffect(() => {
+        if (viewingCollection) {
+            const current = collections.find(c => c.id === viewingCollection.id);
+            if (current) setViewingCollection(current);
+            else setViewingCollection(null); // Collection deleted
+        }
+    }, [collections]);
+
+    const handleUpdateCollection = (updated: Collection) => {
+        setCollections(prev => prev.map(c => c.id === updated.id ? updated : c));
+        setEditingCollection(null);
+    };
+
+    const handleDeleteCollection = () => {
+        if (!editingCollection) return;
+        if (confirm('确定要删除这个收藏夹吗？(不会删除里面的影片)')) {
+            setCollections(prev => prev.filter(c => c.id !== editingCollection.id));
+            setEditingCollection(null);
+            setViewingCollection(null); // Exit view mode
+        }
+    };
 
     const [showDuplicates, setShowDuplicates] = useState(false);
     const [movieToDelete, setMovieToDelete] = useState<MovieRecord | null>(null);
@@ -175,8 +199,18 @@ export default function Library() {
                             <div className="flex flex-col">
                                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                     <Folder size={24} className="text-blue-500" /> {viewingCollection.name}
+                                    <button
+                                        onClick={() => setEditingCollection(viewingCollection)}
+                                        className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-500 transition ml-2"
+                                        title="编辑合集"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
                                 </h1>
-                                <span className="text-xs text-slate-500">包含 {viewingCollection.movieIds.length} 部影片</span>
+                                <span className="text-xs text-slate-500">
+                                    包含 {viewingCollection.movieIds.length} 部影片
+                                    {viewingCollection.description && <span className="ml-2 opacity-70">• {viewingCollection.description}</span>}
+                                </span>
                             </div>
                         </div>
                     ) : (
@@ -324,6 +358,14 @@ export default function Library() {
             {isModalOpen && <AddEditModal onClose={() => setIsModalOpen(false)} onSave={handleSave} editingMovie={editingMovie} appSettings={appSettings} />}
             {movieToDelete && <DeleteConfirmModal movie={movieToDelete} onClose={() => setMovieToDelete(null)} onConfirm={handleDelete} />}
             {addingToCollectionMovie && <AddToCollectionModal movie={addingToCollectionMovie} onClose={() => setAddingToCollectionMovie(null)} />}
+            {editingCollection && (
+                <EditCollectionModal
+                    collection={editingCollection}
+                    onClose={() => setEditingCollection(null)}
+                    onSave={handleUpdateCollection}
+                    onDelete={handleDeleteCollection}
+                />
+            )}
         </div >
     );
 }

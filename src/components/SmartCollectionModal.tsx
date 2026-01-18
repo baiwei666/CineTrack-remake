@@ -1,198 +1,362 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X, Check, Folder, Wand2, ChevronRight, AlertCircle, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Check, Folder, Wand2, AlertCircle, Sparkles, User, Clapperboard, HelpCircle } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { MovieRecord } from '../types';
 
 interface Group {
+    id: string;
     name: string;
-    ids: string[];
+    description: string;
+    movieIds: string[];
     movies: MovieRecord[];
+    type: 'series' | 'director' | 'custom';
+    confidence: number; // 0-100
+    reason: string;
 }
 
 interface SmartCollectionModalProps {
     onClose: () => void;
-    onConfirm: (groups: { name: string; ids: string[] }[]) => void;
+    onConfirm: (groups: { name: string; ids: string[]; description?: string }[]) => void;
 }
 
+// Levenshtein Distance Algorithm
+const levenshtein = (s: string, t: string): number => {
+    if (s === t) return 0;
+    if (s.length === 0) return t.length;
+    if (t.length === 0) return s.length;
+
+    const arr = [];
+    for (let i = 0; i <= t.length; i++) arr[i] = [i];
+    for (let j = 0; j <= s.length; j++) arr[0][j] = j;
+
+    for (let i = 1; i <= t.length; i++) {
+        for (let j = 1; j <= s.length; j++) {
+            arr[i][j] = Math.min(
+                arr[i - 1][j] + 1,
+                arr[i][j - 1] + 1,
+                arr[i - 1][j - 1] + (s[j - 1] === t[i - 1] ? 0 : 1)
+            );
+        }
+    }
+    return arr[t.length][s.length];
+};
+
+const cleanTitle = (t: string) => {
+    return t.toLowerCase()
+        .replace(/^(the|a|an)\s+/, '')
+        // Replace Roman numerals with Arabic for better matching (II -> 2, III -> 3)
+        .replace(/\bii\b/g, '2').replace(/\biii\b/g, '3').replace(/\biv\b/g, '4').replace(/\bv\b/g, '5')
+        // Chinese numbers
+        .replace(/第一[部季章]/g, '1').replace(/第二[部季章]/g, '2').replace(/第三[部季章]/g, '3')
+        .replace(/[^\w\u4e00-\u9fa5\d\s]/g, '') // Remove punctuation
+        .trim();
+};
+
 export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollectionModalProps) {
-    const { movies } = useData();
+    const { movies, collections } = useData();
     const [suggestions, setSuggestions] = useState<Group[]>([]);
-    const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+    const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
     const [isScanning, setIsScanning] = useState(true);
 
-    // Similarity Algorithm
     useEffect(() => {
-        // Run in timeout to avoid blocking UI immediately, though mostly fast enough
         const timer = setTimeout(() => {
             const groups: Group[] = [];
-            const processed = new Set<string>();
+            const processedIds = new Set<string>();
 
-            // Simple heuristic: movies starting with same 3+ chars (min 2 words) or containing "Season" / "Part"
-            // Let's try a token-based approach.
-            // 1. Sort by title
-            const sorted = [...movies].sort((a, b) => a.title.localeCompare(b.title));
+            // 0. Filter out movies already in collections? 
+            // Optional: User might want to reorganize. Let's keep them but maybe flag them? 
+            // For now, scan everything.
 
-            // 2. Iterate and find clusters
-            // If Sim(A, B) > threshold, they belong together.
+            // ==========================================
+            // Pass 1: TMDB Collection ID (Highest Confidence)
+            // ==========================================
+            const collectionMap = new Map<number, MovieRecord[]>();
+            const collectionNames = new Map<number, string>();
 
-            // Helper: Common Prefix Ratio
-            const getCommonPrefix = (s1: string, s2: string) => {
-                let i = 0;
-                while (i < s1.length && i < s2.length && s1[i] === s2[i]) i++;
-                return s1.slice(0, i);
-            };
+            movies.forEach(m => {
+                if (m.collectionId) {
+                    if (!collectionMap.has(m.collectionId)) {
+                        collectionMap.set(m.collectionId, []);
+                        if (m.collectionName) collectionNames.set(m.collectionId, m.collectionName);
+                    }
+                    collectionMap.get(m.collectionId)?.push(m);
+                }
+            });
 
-            // Helper: Clean Title (remove "The", "Season", etc for comparison)
-            const clean = (t: string) => t.toLowerCase().replace(/^(the|a|an)\s+/, '').replace(/[^\w\u4e00-\u9fa5\s]/g, '');
+            collectionMap.forEach((list, id) => {
+                if (list.length >= 2) {
+                    const name = collectionNames.get(id) || list[0].title + ' Collection';
+                    list.forEach(m => processedIds.add(m.id));
+                    groups.push({
+                        id: `tmdb-${id}`,
+                        name: name,
+                        description: `基于 TMDB 系列信息自动整理 (${list.length} 部)`,
+                        movies: list,
+                        movieIds: list.map(m => m.id),
+                        type: 'series',
+                        confidence: 100,
+                        reason: '官方系列信息'
+                    });
+                }
+            });
 
-            let currentGroup: MovieRecord[] = [];
-            let currentPrefix = "";
+            // ==========================================
+            // Pass 2: Title Similarity (Medium-High Confidence)
+            // ==========================================
+            const remaining = movies.filter(m => !processedIds.has(m.id)).sort((a, b) => a.title.localeCompare(b.title));
 
-            for (let i = 0; i < sorted.length; i++) {
-                if (processed.has(sorted[i].id)) continue;
+            for (let i = 0; i < remaining.length; i++) {
+                if (processedIds.has(remaining[i].id)) continue;
 
-                // Start a potential cluster
-                const base = sorted[i];
+                const base = remaining[i];
                 const cluster = [base];
+                const baseClean = cleanTitle(base.title);
 
-                for (let j = i + 1; j < sorted.length; j++) {
-                    if (processed.has(sorted[j].id)) continue;
+                for (let j = i + 1; j < remaining.length; j++) {
+                    if (processedIds.has(remaining[j].id)) continue;
 
-                    const next = sorted[j];
+                    const next = remaining[j];
+                    const nextClean = cleanTitle(next.title);
 
-                    // Logic 1: Exact prefix match of significant length >= 4 chars
-                    const common = getCommonPrefix(base.title, next.title);
-                    // Must match at least 1 word boundary or be very long
-                    const isValidPrefix = common.length >= 4 && (common.endsWith(' ') || common.length > 8);
+                    // Logic:
+                    // 1. Must share starting words (at least 2 chars)
+                    // 2. Edit distance of the REST matches significantly
+                    // OR 
+                    // 3. One is substring of another + numeric suffix
 
-                    // Logic 2: "Harry Potter 1" vs "Harry Potter 2"
-                    // Logic 3: Chinese titles - "黑客帝国1" vs "黑客帝国2" -> common "黑客帝国" (length 4)
+                    const dist = levenshtein(baseClean, nextClean);
+                    const maxLength = Math.max(baseClean.length, nextClean.length);
+                    const similarity = 1 - (dist / maxLength);
 
-                    if (isValidPrefix) {
+                    // Thresholds
+                    const isSimilar = similarity > 0.7; // 70% match
+                    const startsWithSame = baseClean.slice(0, 4) === nextClean.slice(0, 4);
+
+                    if (startsWithSame && isSimilar) {
                         cluster.push(next);
-                        // processed.add(next.id); // Don't mark yet, allow overlapping scanning? No, greedy is fine.
-                    } else {
-                        // Because sorted, if next doesn't match, unlikely subsequent ones do (unless prefix varies slightly).
-                        // But "Star Wars" and "Star Trek" might separate "Star Wars".
-                        // Let's stick to simple adjacent clustering for now or O(N^2) for small library.
-                        // For < 1000 movies, O(N^2) check is ~1M ops, which is < 50ms.
-                        // Let's do greedy O(N^2) on remaining.
                     }
                 }
 
-                // If cluster found
                 if (cluster.length >= 2) {
-                    // Refine cluster: Find the common name
-                    // Taking the shortest title or the common prefix as name
-                    // e.g. "Iron Man", "Iron Man 2" -> "Iron Man"
-                    const commonTitle = getCommonPrefix(cluster[0].title, cluster[cluster.length - 1].title).trim();
-                    const name = commonTitle.length > 2 ? commonTitle : cluster[0].title.split(' ')[0]; // Fallback
+                    // Refine name: Common prefix
+                    // Simple approach: Take the shortest title
+                    const name = cluster.reduce((a, b) => a.title.length < b.title.length ? a : b).title
+                        .replace(/\s*\d+$/, '') // Remove trailing numbers
+                        .replace(/[:：].*$/, ''); // Remove subtitles
 
-                    // Mark as processed
-                    cluster.forEach(m => processed.add(m.id));
-
+                    cluster.forEach(m => processedIds.add(m.id));
                     groups.push({
-                        name: name.replace(/[:：\-\s]+$/, ''), // Clean trailing punctuation
-                        ids: cluster.map(m => m.id),
-                        movies: cluster
+                        id: `title-${base.id}`,
+                        name: name + ' 系列',
+                        description: `根据标题相似度识别 (${cluster.length} 部)`,
+                        movies: cluster,
+                        movieIds: cluster.map(m => m.id),
+                        type: 'series',
+                        confidence: 80,
+                        reason: '标题相似'
                     });
                 }
             }
 
+            // ==========================================
+            // Pass 3: Director Collections (Medium Confidence)
+            //Only if >= 3 movies
+            // ==========================================
+            const directorMap = new Map<string, MovieRecord[]>();
+            movies.filter(m => !processedIds.has(m.id) && m.director).forEach(m => {
+                if (!m.director) return;
+                const d = m.director.trim();
+                if (!directorMap.has(d)) directorMap.set(d, []);
+                directorMap.get(d)?.push(m);
+            });
+
+            directorMap.forEach((list, director) => {
+                if (list.length >= 3) {
+                    list.sort((a, b) => a.year - b.year);
+                    groups.push({
+                        id: `director-${director}`,
+                        name: `${director} 作品集`,
+                        description: `导演: ${director} (${list.length} 部)`,
+                        movies: list,
+                        movieIds: list.map(m => m.id),
+                        type: 'director',
+                        confidence: 60,
+                        reason: '相同导演'
+                    });
+                }
+            });
+
             setSuggestions(groups);
-            // Select all by default
-            setSelectedGroups(new Set(groups.map(g => g.name)));
+            // Default select high confidence groups (>70)
+            setSelectedGroupIds(new Set(groups.filter(g => g.confidence >= 70).map(g => g.id)));
             setIsScanning(false);
-        }, 500);
+
+        }, 800); // Simulate scanning feeling
         return () => clearTimeout(timer);
     }, [movies]);
 
     const handleConfirm = () => {
-        const toCreate = suggestions.filter(g => selectedGroups.has(g.name));
+        const toCreate = suggestions.filter(g => selectedGroupIds.has(g.id))
+            .map(g => ({ name: g.name, ids: g.movieIds, description: g.description }));
         onConfirm(toCreate);
     };
 
+    const toggleGroup = (id: string) => {
+        const next = new Set(selectedGroupIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedGroupIds(next);
+    };
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 flex flex-col max-h-[80vh]">
-                <div className="p-6 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[85vh] overflow-hidden">
+
+                {/* Header */}
+                <div className="p-6 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-900/50">
                     <div>
-                        <h2 className="text-xl font-bold flex items-center gap-2"><Wand2 className="text-purple-600" /> 智能整理合集</h2>
-                        <p className="text-sm text-slate-500 mt-1">根据标题相似度自动发现潜在的影片系列</p>
+                        <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-800 dark:text-white">
+                            <Sparkles className="text-purple-600 animate-pulse" /> 智能整理合集
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            基于 TMDB 系列信息、标题相似度和导演作品自动为您整理。
+                        </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full"><X size={20} /></button>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-full transition text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                    >
+                        <X size={24} />
+                    </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 min-h-[300px]">
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 min-h-[400px] bg-gray-50/30 dark:bg-slate-950/30">
                     {isScanning ? (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-                            <Wand2 className="animate-spin" size={32} />
-                            <p>正在分析您的片库...</p>
+                        <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-6">
+                            <div className="relative">
+                                <Wand2 className="animate-spin text-purple-600" size={48} />
+                                <div className="absolute inset-0 animate-ping opacity-20 bg-purple-500 rounded-full"></div>
+                            </div>
+                            <div className="text-center space-y-2">
+                                <p className="text-lg font-medium text-slate-700 dark:text-slate-300">正在深度分析您的片库...</p>
+                                <p className="text-xs text-slate-500">比对系列信息 • 计算标题相似度 • 归类导演作品</p>
+                            </div>
                         </div>
                     ) : suggestions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-                            <AlertCircle size={32} />
-                            <p>未发现明显的系列影片。</p>
-                            <p className="text-xs">尝试添加更多影片或手动创建。</p>
+                            <div className="p-4 bg-gray-100 dark:bg-slate-800 rounded-full">
+                                <AlertCircle size={32} />
+                            </div>
+                            <p className="font-medium">未发现明显的系列影片。</p>
+                            <p className="text-xs">您可以尝试手动创建合集。</p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">发现 {suggestions.length} 个潜在合集</span>
-                                <button onClick={() => setSelectedGroups(new Set(suggestions.map(g => g.name)))} className="text-xs text-blue-500 hover:underline">全选</button>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur py-3 px-4 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm z-10">
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                        发现 {suggestions.length} 个潜在合集
+                                    </span>
+                                    <span className="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 font-medium">
+                                        已选 {selectedGroupIds.size} 个
+                                    </span>
+                                </div>
+                                <div className="flex gap-3 text-xs">
+                                    <button onClick={() => setSelectedGroupIds(new Set(suggestions.map(g => g.id)))} className="text-blue-600 hover:text-blue-700 font-medium hover:underline">全选</button>
+                                    <span className="text-slate-300">|</span>
+                                    <button onClick={() => setSelectedGroupIds(new Set())} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium hover:underline">清空</button>
+                                </div>
                             </div>
-                            {suggestions.map((group) => (
-                                <div
-                                    key={group.name}
-                                    className={`border rounded-xl p-4 transition cursor-pointer ${selectedGroups.has(group.name) ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-gray-200 dark:border-slate-800 hover:border-purple-300'}`}
-                                    onClick={() => {
-                                        const next = new Set(selectedGroups);
-                                        if (next.has(group.name)) next.delete(group.name);
-                                        else next.add(group.name);
-                                        setSelectedGroups(next);
-                                    }}
-                                >
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selectedGroups.has(group.name) ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-300'}`}>
-                                                {selectedGroups.has(group.name) && <Check size={12} />}
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <input
-                                                    value={group.name}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    onChange={(e) => {
-                                                        group.name = e.target.value; // Mutable update for simpler implementation
-                                                        setSuggestions([...suggestions]);
-                                                    }}
-                                                    className="font-bold text-slate-900 dark:text-white bg-transparent outline-none focus:border-b border-purple-500"
-                                                />
-                                                <span className="text-xs text-slate-500">{group.movies.length} 部影片</span>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                {suggestions.map((group) => {
+                                    const isSelected = selectedGroupIds.has(group.id);
+                                    return (
+                                        <div
+                                            key={group.id}
+                                            className={`
+                                                relative border rounded-2xl p-4 transition-all duration-200 cursor-pointer
+                                                ${isSelected
+                                                    ? 'border-purple-500 bg-white dark:bg-slate-900 ring-1 ring-purple-500 shadow-lg shadow-purple-500/10'
+                                                    : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-purple-300 dark:hover:border-purple-700 opacity-60 hover:opacity-100'}
+                                            `}
+                                            onClick={() => toggleGroup(group.id)}
+                                        >
+                                            <div className="flex items-start gap-4">
+                                                {/* Checkbox */}
+                                                <div className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-300 dark:border-slate-600'}`}>
+                                                    {isSelected && <Check size={14} strokeWidth={3} />}
+                                                </div>
+
+                                                {/* Info */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        {group.type === 'series' && <Clapperboard size={16} className="text-blue-500" />}
+                                                        {group.type === 'director' && <User size={16} className="text-amber-500" />}
+                                                        <h3 className="font-bold text-lg text-slate-800 dark:text-white truncate">
+                                                            {group.name}
+                                                        </h3>
+                                                        {group.confidence === 100 && (
+                                                            <span className="text-[10px] uppercase font-black tracking-wider bg-green-500 text-white px-1.5 py-0.5 rounded">Official</span>
+                                                        )}
+                                                    </div>
+
+                                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2">
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${group.type === 'series' ? 'bg-blue-400' : 'bg-amber-400'}`}></span>
+                                                        {group.reason} • {group.movies.length} 部影片
+                                                    </p>
+
+                                                    {/* Movie Strip */}
+                                                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-slate-700">
+                                                        {group.movies.map((m, idx) => (
+                                                            <div key={m.id} className="relative shrink-0 w-20 aspect-[2/3] rounded-lg overflow-hidden bg-gray-100 dark:bg-slate-800 shadow-sm border border-black/5 dark:border-white/5 group/poster">
+                                                                {m.coverUrl ? (
+                                                                    <img src={m.coverUrl} className="w-full h-full object-cover transition duration-300 group-hover/poster:scale-110" loading="lazy" />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center text-slate-300"><Clapperboard size={20} /></div>
+                                                                )}
+                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/poster:opacity-100 transition-opacity flex items-end p-2">
+                                                                    <span className="text-[10px] text-white font-medium leading-tight line-clamp-2">{m.title}</span>
+                                                                </div>
+                                                                {/* Order Badge */}
+                                                                <div className="absolute top-1 left-1 bg-black/60 backdrop-blur text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full">
+                                                                    {m.year}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                                        {group.movies.map(m => (
-                                            <div key={m.id} className="relative shrink-0 w-16 aspect-[2/3] rounded-md overflow-hidden bg-gray-200">
-                                                {m.coverUrl && <img src={m.coverUrl} className="w-full h-full object-cover" />}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                <div className="p-6 border-t border-gray-200 dark:border-slate-800 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-5 py-2 text-slate-600 dark:text-slate-400 font-bold hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl">取消</button>
-                    <button
-                        disabled={selectedGroups.size === 0}
-                        onClick={handleConfirm}
-                        className="px-5 py-2 bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-600/20 flex items-center gap-2"
-                    >
-                        <Wand2 size={18} /> 创建 {selectedGroups.size} 个合集
-                    </button>
+                {/* Footer */}
+                <div className="p-6 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center rounded-b-2xl">
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <HelpCircle size={14} />
+                        <span>勾选您希望创建的合集</span>
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2.5 text-slate-600 dark:text-slate-400 font-bold hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition"
+                        >
+                            取消
+                        </button>
+                        <button
+                            disabled={selectedGroupIds.size === 0}
+                            onClick={handleConfirm}
+                            className="px-6 py-2.5 bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-600/20 flex items-center gap-2 transition transform active:scale-95"
+                        >
+                            <Wand2 size={18} /> 创建 {selectedGroupIds.size} 个合集
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
