@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Folder, Wand2, AlertCircle, Sparkles, User, Clapperboard, HelpCircle } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { MovieRecord } from '../types';
+import { BatchProgress, analyzeForCollectionsBatched } from '../services/aiService';
 
 interface Group {
     id: string;
@@ -15,6 +16,7 @@ interface Group {
 }
 
 interface SmartCollectionModalProps {
+    mode: 'AI' | 'Local';
     onClose: () => void;
     onConfirm: (groups: { name: string; ids: string[]; description?: string }[]) => void;
 }
@@ -52,20 +54,17 @@ const cleanTitle = (t: string) => {
         .trim();
 };
 
-export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollectionModalProps) {
-    const { movies, collections } = useData();
+export default function SmartCollectionModal({ mode, onClose, onConfirm }: SmartCollectionModalProps) {
+    const { movies, collections, appSettings } = useData();
     const [suggestions, setSuggestions] = useState<Group[]>([]);
     const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
     const [isScanning, setIsScanning] = useState(true);
+    const [progress, setProgress] = useState<BatchProgress | null>(null);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
+        const scanLocally = () => {
             const groups: Group[] = [];
             const processedIds = new Set<string>();
-
-            // 0. Filter out movies already in collections? 
-            // Optional: User might want to reorganize. Let's keep them but maybe flag them? 
-            // For now, scan everything.
 
             // ==========================================
             // Pass 1: TMDB Collection ID (Highest Confidence)
@@ -118,18 +117,11 @@ export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollec
                     const next = remaining[j];
                     const nextClean = cleanTitle(next.title);
 
-                    // Logic:
-                    // 1. Must share starting words (at least 2 chars)
-                    // 2. Edit distance of the REST matches significantly
-                    // OR 
-                    // 3. One is substring of another + numeric suffix
-
                     const dist = levenshtein(baseClean, nextClean);
                     const maxLength = Math.max(baseClean.length, nextClean.length);
                     const similarity = 1 - (dist / maxLength);
 
-                    // Thresholds
-                    const isSimilar = similarity > 0.7; // 70% match
+                    const isSimilar = similarity > 0.7;
                     const startsWithSame = baseClean.slice(0, 4) === nextClean.slice(0, 4);
 
                     if (startsWithSame && isSimilar) {
@@ -138,11 +130,9 @@ export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollec
                 }
 
                 if (cluster.length >= 2) {
-                    // Refine name: Common prefix
-                    // Simple approach: Take the shortest title
                     const name = cluster.reduce((a, b) => a.title.length < b.title.length ? a : b).title
-                        .replace(/\s*\d+$/, '') // Remove trailing numbers
-                        .replace(/[:：].*$/, ''); // Remove subtitles
+                        .replace(/\s*\d+$/, '')
+                        .replace(/[:：].*$/, '');
 
                     cluster.forEach(m => processedIds.add(m.id));
                     groups.push({
@@ -160,7 +150,6 @@ export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollec
 
             // ==========================================
             // Pass 3: Director Collections (Medium Confidence)
-            //Only if >= 3 movies
             // ==========================================
             const directorMap = new Map<string, MovieRecord[]>();
             movies.filter(m => !processedIds.has(m.id) && m.director).forEach(m => {
@@ -187,13 +176,58 @@ export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollec
             });
 
             setSuggestions(groups);
-            // Default select high confidence groups (>70)
             setSelectedGroupIds(new Set(groups.filter(g => g.confidence >= 70).map(g => g.id)));
             setIsScanning(false);
+        };
 
-        }, 800); // Simulate scanning feeling
-        return () => clearTimeout(timer);
-    }, [movies]);
+        const performScan = async () => {
+            setIsScanning(true);
+            setProgress(null);
+
+            if (mode === 'AI') {
+                console.log('[SmartOrganize] Starting AI scan...');
+
+                if (appSettings?.aiProvider && appSettings.aiProvider !== 'Mock' && appSettings.aiApiKey) {
+                    try {
+                        const aiSuggestions = await analyzeForCollectionsBatched(movies, appSettings, (p) => {
+                            setProgress(p);
+                        });
+
+                        const groups: Group[] = aiSuggestions.map(s => ({
+                            id: s.id,
+                            name: s.name,
+                            description: s.description,
+                            movieIds: s.movieIds,
+                            movies: s.movies,
+                            type: 'custom' as const,
+                            confidence: s.confidence,
+                            reason: s.reason
+                        }));
+
+                        setSuggestions(groups);
+                        setSelectedGroupIds(new Set(groups.map(g => g.id)));
+                        setIsScanning(false);
+                        return;
+                    } catch (err: any) {
+                        console.warn('[SmartOrganize] AI Scan failed:', err?.message || err);
+                        // Fallback logic could be added here, but for now we stay in AI mode state to show error or just stop
+                        setIsScanning(false);
+                    }
+                } else {
+                    // Not configured, fallback to local immediately or show error? 
+                    // Let's fallback to local for now but maybe we should alert user.
+                    console.log('[SmartOrganize] AI not configured, using local scan');
+                    scanLocally();
+                }
+            } else {
+                // Local mode
+                console.log('[SmartOrganize] Starting local scan...');
+                setTimeout(scanLocally, 500);
+            }
+        };
+
+        performScan();
+    }, [movies, appSettings, mode]);
 
     const handleConfirm = () => {
         const toCreate = suggestions.filter(g => selectedGroupIds.has(g.id))
@@ -216,10 +250,13 @@ export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollec
                 <div className="p-6 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-900/50">
                     <div>
                         <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-800 dark:text-white">
-                            <Sparkles className="text-purple-600 animate-pulse" /> 智能整理合集
+                            <Sparkles className="text-purple-600 animate-pulse" /> {mode === 'AI' ? 'AI 智能整理合集' : '本地快速整理合集'}
+                            {mode === 'AI' && <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded border border-purple-200">AI Powered</span>}
                         </h2>
                         <p className="text-sm text-slate-500 mt-1">
-                            基于 TMDB 系列信息、标题相似度和导演作品自动为您整理。
+                            {mode === 'AI'
+                                ? '基于 AI 深度分析为您整理的合集建议。'
+                                : '基于 TMDB 系列信息、标题相似度和导演作品自动为您整理。'}
                         </p>
                     </div>
                     <button
@@ -239,8 +276,30 @@ export default function SmartCollectionModal({ onClose, onConfirm }: SmartCollec
                                 <div className="absolute inset-0 animate-ping opacity-20 bg-purple-500 rounded-full"></div>
                             </div>
                             <div className="text-center space-y-2">
-                                <p className="text-lg font-medium text-slate-700 dark:text-slate-300">正在深度分析您的片库...</p>
-                                <p className="text-xs text-slate-500">比对系列信息 • 计算标题相似度 • 归类导演作品</p>
+                                <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
+                                    {mode === 'AI' ? '正在进行 AI 深度分析...' : '正在进行本地快速分析...'}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                    {mode === 'AI'
+                                        ? '智能识别系列 • 分析剧情关联 • 深度归类'
+                                        : '比对系列信息 • 计算标题相似度 • 归类导演作品'}
+                                </p>
+                                {mode === 'AI' && progress && (
+                                    <div className="mt-4 flex flex-col items-center gap-2 animate-in fade-in w-full max-w-sm">
+                                        <div className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                            {progress.status}
+                                        </div>
+                                        <div className="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-purple-500 transition-all duration-300 ease-out"
+                                                style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                                            />
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                            {Math.round((progress.current / progress.total) * 100)}%
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ) : suggestions.length === 0 ? (

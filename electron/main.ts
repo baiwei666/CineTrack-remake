@@ -137,7 +137,8 @@ ipcMain.handle('db:read', async () => {
 // IPC: Write Data
 ipcMain.handle('db:write', async (_event, data) => {
   const dataPath = await getDataPath();
-  const tempPath = `${dataPath}.tmp`;
+  // Use unique temp file path to prevent race conditions during concurrent writes
+  const tempPath = `${dataPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
 
   try {
     // 1. Write to temp file first

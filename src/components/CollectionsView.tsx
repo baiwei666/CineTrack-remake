@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Folder, Plus, MoreVertical, Trash2, Edit2, Film, Calendar, Wand2 } from 'lucide-react';
+import { Folder, Plus, MoreVertical, Trash2, Edit2, Film, Calendar, Wand2, Sparkles } from 'lucide-react';
 import { Collection } from '../types';
 import { useData } from '../context/DataContext';
 import SmartCollectionModal from './SmartCollectionModal';
@@ -13,6 +13,7 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
     const { collections, setCollections, movies } = useData();
     const [isCreating, setIsCreating] = useState(false);
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
+    const [smartMode, setSmartMode] = useState<'AI' | 'Local'>('Local');
     const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
     const [newCollectionName, setNewCollectionName] = useState('');
 
@@ -79,10 +80,18 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
                 </div>
                 <div className="flex gap-2">
                     <button
-                        onClick={() => setIsSmartModalOpen(true)}
-                        className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-purple-600/20 transition hover:-translate-y-0.5"
+                        onClick={() => { setSmartMode('AI'); setIsSmartModalOpen(true); }}
+                        className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-purple-600/20 transition hover:-translate-y-0.5"
+                        title="使用 AI 深度分析（可能需要较长时间）"
                     >
-                        <Wand2 size={18} /> 智能整理
+                        <Wand2 size={18} /> AI 智能整理
+                    </button>
+                    <button
+                        onClick={() => { setSmartMode('Local'); setIsSmartModalOpen(true); }}
+                        className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/20 transition hover:-translate-y-0.5"
+                        title="基于规则快速整理"
+                    >
+                        <Sparkles size={18} /> 本地快速整理
                     </button>
                     <button
                         onClick={() => setIsCreating(true)}
@@ -186,6 +195,7 @@ export default function CollectionsView({ onSelectCollection }: CollectionsViewP
             {/* Modals */}
             {isSmartModalOpen && (
                 <SmartCollectionModal
+                    mode={smartMode}
                     onClose={() => setIsSmartModalOpen(false)}
                     onConfirm={(groups) => {
                         const newCols = groups.map(g => ({

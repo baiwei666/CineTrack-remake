@@ -107,3 +107,22 @@ export interface BackupData {
   settings: AppSettings;
   theme: 'dark' | 'light';
 }
+
+// Enhanced AI Analysis Types
+export interface LibraryInsights {
+  profileKeywords: string[];
+  genreDistribution: { genre: string; percentage: number; count: number }[];
+  directorAnalysis: { name: string; count: number; style: string }[];
+  emotionalProfile: { emotion: string; percentage: number; color: string }[];
+  watchingHabits: string[];
+  deepAnalysis: string;
+  recommendations: { title: string; reason: string; matchScore: number }[];
+  generatedAt?: string;
+}
+
+export interface StoredReport {
+  id: string;
+  insights: LibraryInsights;
+  movieCount: number;
+  generatedAt: string;
+}
