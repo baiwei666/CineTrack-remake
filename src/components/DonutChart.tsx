@@ -1,6 +1,6 @@
 import React from 'react';
 
-const DonutChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
+const DonutChart = ({ data, displayTotal }: { data: { label: string; value: number; color: string }[]; displayTotal?: number }) => {
   const total = data.reduce((acc, curr) => acc + curr.value, 0);
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -36,7 +36,7 @@ const DonutChart = ({ data }: { data: { label: string; value: number; color: str
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <span className="text-3xl font-bold text-slate-800 dark:text-white drop-shadow-sm">{total}</span>
+        <span className="text-3xl font-bold text-slate-800 dark:text-white drop-shadow-sm">{displayTotal ?? total}</span>
         <span className="text-xs text-slate-500 font-medium">看过的影片</span>
       </div>
     </div>

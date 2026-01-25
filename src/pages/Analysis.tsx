@@ -13,6 +13,8 @@ export default function Analysis() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [progress, setProgress] = useState<BatchProgress | null>(null);
     const [currentReport, setCurrentReport] = useState<LibraryInsights | null>(null);
+    const [reportCount, setReportCount] = useState(0);
+
     const [history, setHistory] = useState<StoredReport[]>([]);
     const [showHistory, setShowHistory] = useState(false);
 
@@ -26,6 +28,7 @@ export default function Analysis() {
                 // Load most recent if available
                 if (parsed.length > 0 && !currentReport) {
                     setCurrentReport(parsed[0].insights);
+                    setReportCount(parsed[0].movieCount);
                 }
             } catch (e) {
                 console.error("Failed to load history", e);
@@ -53,6 +56,7 @@ export default function Analysis() {
             localStorage.setItem('cinetrack_ai_reports', JSON.stringify(newHistory));
             if (currentReport && history.find(h => h.id === id)?.insights === currentReport) {
                 setCurrentReport(newHistory.length > 0 ? newHistory[0].insights : null);
+                setReportCount(newHistory.length > 0 ? newHistory[0].movieCount : 0);
             }
         }
     };
@@ -69,6 +73,7 @@ export default function Analysis() {
                 setProgress(p);
             });
             setCurrentReport(report);
+            setReportCount(movies.length);
             saveReport(report);
         } catch (e: any) {
             console.error(e);
@@ -116,7 +121,11 @@ export default function Analysis() {
                         history.map(item => (
                             <div
                                 key={item.id}
-                                onClick={() => { setCurrentReport(item.insights); setShowHistory(false); }}
+                                onClick={() => {
+                                    setCurrentReport(item.insights);
+                                    setReportCount(item.movieCount);
+                                    setShowHistory(false);
+                                }}
                                 className={`
                                     p-3 rounded-xl border cursor-pointer transition-all group relative
                                     ${currentReport === item.insights
@@ -213,7 +222,7 @@ export default function Analysis() {
                                     <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center mb-3">
                                         <Film size={24} />
                                     </div>
-                                    <span className="text-3xl font-bold text-slate-800 dark:text-white">{movies.length}</span>
+                                    <span className="text-3xl font-bold text-slate-800 dark:text-white">{reportCount}</span>
                                     <span className="text-xs text-slate-500 uppercase tracking-wider mt-1">分析影片总数</span>
                                 </div>
                                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center">
@@ -266,7 +275,7 @@ export default function Analysis() {
                                         <PieChart size={16} /> 类型偏好分布
                                     </h3>
                                     <div className="flex items-center justify-center py-4">
-                                        <DonutChart data={genreData} />
+                                        <DonutChart data={genreData} displayTotal={reportCount} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 mt-4">
                                         {currentReport.genreDistribution.slice(0, 6).map((g, i) => (
