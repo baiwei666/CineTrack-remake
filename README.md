@@ -1,3 +1,5 @@
+
+
 # CineTrack 🎬
 
 **CineTrack** 也就是 **CineTrack-remake**，是一个现代化的个人观影追踪应用，专为影迷打造。它结合了沉浸式的视觉体验与强大的数据管理功能，帮助你优雅地记录每一部看过的电影和剧集。
@@ -76,6 +78,13 @@ npm run electron:build
 构建产物将位于 `dist/` 目录下。
 - **免安装版**: `dist/win-unpacked/CineTrack.exe`
 - **安装包**: `dist/CineTrack Setup <version>.exe` (需配置签名环境)
+
+## 🔑 配置 TMDB API Key
+
+为了使用自动获取影片信息（海报、剧情、演职员等）的功能，你需要一个免费的 TMDB API Key：
+1. 访问 [The Movie Database (TMDB)](https://www.themoviedb.org/) 注册账号。
+2. 在设置中申请 API Key (v3 auth)。
+3. 启动应用后，在 **设置** 页面填入你的 API Key 即可启用自动化元数据功能。
 
 ## 📂 项目结构
 
